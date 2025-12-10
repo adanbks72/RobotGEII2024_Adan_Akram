@@ -1,44 +1,17 @@
-#include <stdio.h>
 #include <xc.h>
 #include "UART_Protocol.h"
 #include "CB_TX1.h"
+#include <stdint.h>
+#include "timer.h"
 #include "IO.h"
+#include "CB_RX1.h"
+#include "main.h"
 #include "Utilities.h"
-#include "robot.h"
 #include "asservissement.h"
-#include "math.h"
-#include "trajectory.h"
+#include "Robot.h"
+#include "GhostManager.h"
 
-
-void EnvoieDistanceTelemetre() {
-    unsigned char payload[10];
-    // int val_ExG = (int) robotState.distanceTelemetreExGauche;
-    payload[0] = (unsigned char) ((int) robotState.distanceTelemetreExGauche);
-    payload[1] = (unsigned char) (((int) robotState.distanceTelemetreExGauche) >> 8);
-    payload[2] = (unsigned char) ((int) robotState.distanceTelemetreGauche);
-    payload[3] = (unsigned char) (((int) robotState.distanceTelemetreGauche) >> 8);
-    payload[4] = (unsigned char) ((int) robotState.distanceTelemetreCentre);
-    payload[5] = (unsigned char) (((int) robotState.distanceTelemetreCentre) >> 8);
-    payload[6] = (unsigned char) ((int) robotState.distanceTelemetreDroit);
-    payload[7] = (unsigned char) (((int) robotState.distanceTelemetreDroit) >> 8);
-    payload[8] = (unsigned char) ((int) robotState.distanceTelemetreExDroite);
-    payload[9] = (unsigned char) (((int) robotState.distanceTelemetreExDroite) >> 8);
-    UartEncodeAndSendMessage(0x0030, 10, payload);
-}
-
-/*void EvoieMoteurInfo(){
-    
-}*/
-
-void sendled(void) {
-    unsigned char led[5];
-    led[0] = LED_VERTE_2;
-    led[1] = LED_BLEUE_2;
-    led[2] = LED_BLANCHE_2;
-    led[3] = LED_ORANGE_2;
-    led[4] = LED_ROUGE_2;
-    UartEncodeAndSendMessage(0x0020, 5, led);
-}
+extern volatile GhostPosition ghostPosition;
 
 void UartEncodeAndSendMessage(int msgFunction, int msgPayloadLength, unsigned char* payload) {
     unsigned char message [6 + msgPayloadLength];
@@ -68,134 +41,121 @@ unsigned char UartCalculateChecksum(int msgFunction, int msgPayloadLength, unsig
     return c;
 }
 
+unsigned char rcvState = STATE_ATTENTE;
 int msgDecodedFunction = 0;
 int msgDecodedPayloadLength = 0;
 unsigned char msgDecodedPayload[128];
 int msgDecodedPayloadIndex = 0;
-StateReception rcvState = Waiting;
+unsigned char calculatedChecksum;
+unsigned char receivedChecksum;
 
 void UartDecodeMessage(unsigned char c) {
-    unsigned char receivedChecksum;
-    unsigned char calculatedChecksum;
+    //Fonction prenant en entree un octet et servant a reconstituer les trames
+
     switch (rcvState) {
-        case Waiting:
-            if (c == 0xFE) {
-                rcvState = FunctionMSB;
-            }
+        case STATE_ATTENTE:
+            if (c == 0xFE)
+                rcvState = STATE_FUNCTION_MSB;
             break;
-        case FunctionMSB:
+        case STATE_FUNCTION_MSB:
             msgDecodedFunction = c << 8;
-            rcvState = FunctionLSB;
+            rcvState = STATE_FUNCTION_LSB;
             break;
-        case FunctionLSB:
+        case STATE_FUNCTION_LSB:
             msgDecodedFunction |= c;
-            rcvState = PayloadLengthMSB;
+            rcvState = STATE_PAYLOAD_LENGTH_MSB;
             break;
-        case PayloadLengthMSB:
+        case STATE_PAYLOAD_LENGTH_MSB:
             msgDecodedPayloadLength = c << 8;
-            rcvState = PayloadLengthLSB;
+            rcvState = STATE_PAYLOAD_LENGTH_LSB;
             break;
-        case PayloadLengthLSB:
+        case STATE_PAYLOAD_LENGTH_LSB:
             msgDecodedPayloadLength |= c;
-            if (msgDecodedPayloadLength > 128) {
-                rcvState = Waiting; // Payload trop grand
-            } else if (msgDecodedPayloadLength > 0) {
-                msgDecodedPayloadIndex = 0;
-                rcvState = Payload;
+            if (msgDecodedPayloadLength < 1024) {
+                if (msgDecodedPayloadLength > 0) {
+                    rcvState = STATE_PAYLOAD;
+                } else {
+                    rcvState = STATE_CHECKSUM;
+                }
             } else {
-                rcvState = CheckSum;
+                rcvState = STATE_ATTENTE;
             }
             break;
-        case Payload:
-            msgDecodedPayload[msgDecodedPayloadIndex++] = c;
-            if (msgDecodedPayloadIndex >= msgDecodedPayloadLength) {
-                rcvState = CheckSum;
+        case STATE_PAYLOAD:
+            if (msgDecodedPayloadIndex <= msgDecodedPayloadLength) {
+                msgDecodedPayload[msgDecodedPayloadIndex] = c;
+                if (++msgDecodedPayloadIndex >= msgDecodedPayloadLength) {
+                    rcvState = STATE_CHECKSUM;
+                    msgDecodedPayloadIndex = 0;
+                }
+
             }
             break;
-        case CheckSum:
-            receivedChecksum = c;
-            calculatedChecksum = UartCalculateChecksum(msgDecodedFunction, msgDecodedPayloadLength, msgDecodedPayload);
-            if (receivedChecksum == calculatedChecksum) {
+        case STATE_CHECKSUM:
+            calculatedChecksum = c;
+
+            receivedChecksum = UartCalculateChecksum(msgDecodedFunction, msgDecodedPayloadLength, msgDecodedPayload);
+            if (calculatedChecksum == receivedChecksum) {
+                //Success, on a un message valide
                 UartProcessDecodedMessage(msgDecodedFunction, msgDecodedPayloadLength, msgDecodedPayload);
+            } else {
+                //print("Les checksums sont différents");
             }
-            rcvState = Waiting;
+            rcvState = STATE_ATTENTE;
             break;
         default:
-            rcvState = Waiting;
+            rcvState = STATE_ATTENTE;
             break;
     }
 }
 
-float correcteurKp, correcteurKd, correcteurKi, consigneLineaire, limitPX, limitIX, limitDX;
+void Uart2DecodeMessage(unsigned char c) {
+    
+}
 
-float correcteurThetaKp, correcteurThetaKd, correcteurThetaKi, consigneAngulaire, limitPTheta, limitITheta, limitDTheta;
 
-double Click_x, Click_y;
+int rcvFunction;
 
-void UartProcessDecodedMessage(int function, int payloadLength, unsigned char* payload) {
-    int etatLed;
-    switch (function) {
-        case 0x0030:
+void UartProcessDecodedMessage(int rcvFunction, int payloadLength, unsigned char* payload) {
+    switch (rcvFunction) {
+        case CONFIG_PIDX:
+            SetupPidAsservissement(&robotState.PidX, getFloat(payload, 0),  getFloat(payload, 4),  
+                     getFloat(payload, 8), getFloat(payload, 12), getFloat(payload, 16), getFloat(payload, 20));
             break;
-        case 0x0040:
-
-            break;
-        case 0x0020:
-            etatLed = payload[0];
-            if (etatLed == 0) {
-                LED_VERTE_2 = payload[1];
-            } else if (etatLed == 1) {
-                LED_BLEUE_2 = payload[1];
-            } else if (etatLed == 2) {
-                LED_BLANCHE_2 = payload[1];
-            } else if (etatLed == 3) {
-                LED_ORANGE_2 = payload[1];
-            } else if (etatLed == 4) {
-                LED_ROUGE_2 = payload[1];
-            }
-            break;
-
-        case PidXConf:
-            correcteurKp = getFloat(payload, 0);
-            correcteurKi = getFloat(payload, 4);
-            correcteurKd = getFloat(payload, 8);
-            limitPX = getFloat(payload, 12);
-            limitIX = getFloat(payload, 16);
-            limitDX = getFloat(payload, 20);
-
-            SetupPidAsservissement(&robotState.PidX,
-                    (double) correcteurKp,
-                    (double) correcteurKi,
-                    (double) correcteurKd,
-                    (double) limitPX,
-                    (double) limitIX,
-                    (double) limitDX);
-            break;
-
-        case PidThetaConf:        
-            correcteurThetaKp = getFloat(payload, 0);
-            correcteurThetaKi = getFloat(payload, 4);
-            correcteurThetaKd = getFloat(payload, 8);
-            limitPTheta = getFloat(payload, 12);
-            limitITheta = getFloat(payload, 16);
-            limitDTheta = getFloat(payload, 20);
-
-            SetupPidAsservissement(&robotState.PidTheta,
-                    (double) correcteurThetaKp,
-                    (double) correcteurThetaKi,
-                    (double) correcteurThetaKd,
-                    (double) limitPTheta,
-                    (double) limitITheta,
-                    (double) limitDTheta);
-
+        case CONFIG_PIDTheta:
+            SetupPidAsservissement(&robotState.PidTheta, getFloat(payload, 0),  getFloat(payload, 4),  
+                     getFloat(payload, 8), getFloat(payload, 12), getFloat(payload, 16), getFloat(payload, 20));
             break;
             
-/*        case PosClickGhost:
-            Click_x = getDouble(payload, 0);
-            Click_y = getDouble(payload, 8);
-            SetGhostTarget(Click_x, Click_y);
-            break;*/
+        case CONFIG_VLINEAIRE:
+            robotState.consigneVitesseLineaire = getFloat(payload, 0);
+            break;
+            
+        case CONFIG_VANGULAIRE:
+            robotState.consigneVitesseAngulaire = getFloat(payload, 0);
+            break;
+        
+        case SET_GHOST_POSITION:
+            ghostPosition.targetX = getFloat(payload, 0);
+            ghostPosition.targetY = getFloat(payload, 4);
+            break;
+            
         default:
             break;
+
     }
+
+}
+
+void robotStateChange(unsigned char rbState ) {
+    unsigned char msg[5];
+    int position = 0;
+    unsigned long tstamp = timestamp;
+    msg[position++] = rbState;
+    msg[position++] = (unsigned char) (tstamp >> 24);
+    msg[position++] = (unsigned char) (tstamp >> 16);
+    msg[position++] = (unsigned char) (tstamp >> 8);
+    msg[position++] = (unsigned char) tstamp;
+
+    UartEncodeAndSendMessage(0x0050, 5, msg);
 }

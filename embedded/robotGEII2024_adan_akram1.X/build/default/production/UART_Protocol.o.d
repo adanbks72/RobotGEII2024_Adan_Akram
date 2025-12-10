@@ -1,16 +1,23 @@
 build/default/production/UART_Protocol.o: UART_Protocol.c UART_Protocol.h \
- asservissement.h robot.h CB_TX1.h IO.h Utilities.h trajectory.h
+ CB_TX1.h timer.h IO.h CB_RX1.h main.h Utilities.h asservissement.h \
+ Robot.h GhostManager.h
 
 UART_Protocol.h:
 
-asservissement.h:
-
-robot.h:
-
 CB_TX1.h:
+
+timer.h:
 
 IO.h:
 
+CB_RX1.h:
+
+main.h:
+
 Utilities.h:
 
-trajectory.h:
+asservissement.h:
+
+Robot.h:
+
+GhostManager.h:

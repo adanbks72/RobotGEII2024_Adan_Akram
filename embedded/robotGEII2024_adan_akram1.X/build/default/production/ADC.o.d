@@ -1,5 +1,5 @@
-build/default/production/ADC.o: ADC.c adc.h main.h
+build/default/production/ADC.o: ADC.c ADC.h main.h
 
-adc.h:
+ADC.h:
 
 main.h:

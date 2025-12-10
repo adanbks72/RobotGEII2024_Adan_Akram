@@ -8,14 +8,17 @@
 #ifndef QEI_H
 #define	QEI_H
 
-#define COEF_VITESSE 30
-#define DISTROUES 0.217
-#define FREQ_ECH_QEI 250
-
 void InitQEI1();
 void InitQEI2();
 void QEIUpdateData();
 void SendPositionData();
+
+#define COEF_VITESSE_POURCENT 40
+#define DISTROUES 0.216
+#define FREQ_ECH_QEI 250
+#define POSITION_DATA 0x0061
+
+
 
 #endif	/* QEI_H */
 

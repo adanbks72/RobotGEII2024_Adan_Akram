@@ -1,6 +1,6 @@
 build/default/production/main.o: main.c ChipConfig.h IO.h timer.h PWM.h \
- robot.h asservissement.h ToolBox.h ADC.h main.h UART.h CB_TX1.h CB_RX1.h \
- UART_protocol.h QEI.h trajectory.h
+ ADC.h Robot.h asservissement.h main.h UART.h CB_TX1.h CB_RX1.h \
+ UART_Protocol.h QEI.h Utilities.h GhostManager.h
 
 ChipConfig.h:
 
@@ -10,13 +10,11 @@ timer.h:
 
 PWM.h:
 
-robot.h:
+ADC.h:
+
+Robot.h:
 
 asservissement.h:
-
-ToolBox.h:
-
-ADC.h:
 
 main.h:
 
@@ -26,8 +24,10 @@ CB_TX1.h:
 
 CB_RX1.h:
 
-UART_protocol.h:
+UART_Protocol.h:
 
 QEI.h:
 
-trajectory.h:
+Utilities.h:
+
+GhostManager.h:

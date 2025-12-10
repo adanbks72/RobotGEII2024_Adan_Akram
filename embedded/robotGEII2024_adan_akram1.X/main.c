@@ -12,52 +12,51 @@
 #include "IO.h"
 #include "timer.h"
 #include "PWM.h"
-#include "robot.h"
-#include "ToolBox.h"
 #include "ADC.h"
+#include "Robot.h"
 #include "main.h"
 #include "UART.h"
 #include "CB_TX1.h"
 #include "CB_RX1.h"
-#include "UART_protocol.h"
-#include "QEI.h"
+#include "UART_Protocol.h"
 #include <libpic30.h>
+#include "QEI.h"
+#include "Utilities.h"
 #include "asservissement.h"
-#include "trajectory.h"
+#include "GhostManager.h"
 
+#include <string.h> 
+unsigned char controlState;
+int mode = 0;
+double thetaRes = 0;
+double thetawp = 0;
+double thetaRobot = 0;
+double thetaStop = 0;
+double aAng = 0;
+double vMax = 3;
+double tolAng = 0;
+double vAng = 0;
+
+float vitessed = 25;
+float vitesseg = 25;
 unsigned char stateRobot;
 unsigned int tstart = 0;
 float Vitesse;
 float boundaryTelemetre = 100;
 unsigned char payload;
 
-void updateSensorValues() {
-    if (ADCIsConversionFinished() == 1) {
-        ADCClearConversionFinishedFlag();
-        unsigned int *result = ADCGetResult();
-        float volts = ((float) result[0]) * 3.3 / 4096;
-        robotState.distanceTelemetreExGauche = Min(34 / volts - 5, boundaryTelemetre);
-        volts = ((float) result[1]) * 3.3 / 4096;
-        robotState.distanceTelemetreGauche = Min(34 / volts - 5, boundaryTelemetre);
-        volts = ((float) result[2]) * 3.3 / 4096;
-        robotState.distanceTelemetreCentre = Min(34 / volts - 5, boundaryTelemetre);
-        volts = ((float) result[3]) * 3.3 / 4096;
-        robotState.distanceTelemetreDroit = Min(34 / volts - 5, boundaryTelemetre);
-        volts = ((float) result[4]) * 3.3 / 4096;
-        robotState.distanceTelemetreExDroite = Min(34 / volts - 5, boundaryTelemetre);
-    }
-}
+extern volatile GhostPosition ghostPosition;
 
 int main(void) {
 
     InitOscillator();
 
     InitIO();
-    InitTimer1();
-    InitTimer4();
     InitTimer23();
+    InitTimer1();
     InitPWM();
     InitADC1();
+    InitTimer4();
     InitUART();
     InitQEI1();
     InitQEI2();
@@ -67,9 +66,15 @@ int main(void) {
     //robotState.yPosFromOdometry = ghostPosition.y;
     
     InitTrajectoryGenerator();
-
-    SetupPidAsservissement(&robotState.PidX, 2.9f, 39.0f, 0.0f,100.0f, 100.0f, 100.0f);
-    SetupPidAsservissement(&robotState.PidTheta, 3.1f, 42.0f, 0.0f,100.0f, 100.0f, 100.0f);
+    
+    robotState.angleRadianFromOdometry = ghostPosition.theta;
+    robotState.xPosFromOdometry = ghostPosition.x;
+    robotState.yPosFromOdometry = ghostPosition.y;
+    
+    SetupPidAsservissement(&robotState.PidX, 1.0f,  30.0f,0.0f, 100.0f, 100.0f, 100.0f);
+    SetupPidAsservissement(&robotState.PidTheta, 1.0f,  30.0f,0.0f, 100.0f, 100.0f, 100.0f);
+    SetupPidAsservissement(&robotState.PdTheta, 0.625f,  0.0f, 0.5f, 100.0f, 100.0f, 100.0f);
+    SetupPidAsservissement(&robotState.PdLin, 0.0f,  0.0f, 0.5f, 100.0f, 100.0f, 100.0f);
     
             
     while (1) {
@@ -78,11 +83,16 @@ int main(void) {
             UartDecodeMessage(data);
         }
     }
-
     return 0;
 }
 
-void Cap() {
+unsigned char stateRobot;
+
+void SetRobotState(unsigned char state) {
+    robotState.mode = state;
+}
+
+/*void Cap() {
     if (robotState.distanceTelemetreExDroite < 24) {
         LED_VERTE_1 = 1;
     } else {
@@ -108,7 +118,7 @@ void Cap() {
     } else {
         LED_BLANCHE_1 = 0;
     }
-}
+}*/
 
 /*
 unsigned char nextStateRobot = 0;

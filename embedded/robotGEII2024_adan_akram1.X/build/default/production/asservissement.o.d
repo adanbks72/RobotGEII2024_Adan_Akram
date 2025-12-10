@@ -1,23 +1,16 @@
-build/default/production/asservissement.o: asservissement.c \
- asservissement.h QEI.h timer.h IO.h UART_Protocol.h robot.h UART.h \
- Utilities.h PWM.h trajectory.h
-
-asservissement.h:
-
-QEI.h:
-
-timer.h:
-
-IO.h:
-
-UART_Protocol.h:
-
-robot.h:
-
-UART.h:
+build/default/production/asservissement.o: asservissement.c Utilities.h \
+ asservissement.h UART_Protocol.h Robot.h QEI.h PWM.h GhostManager.h
 
 Utilities.h:
 
+asservissement.h:
+
+UART_Protocol.h:
+
+Robot.h:
+
+QEI.h:
+
 PWM.h:
 
-trajectory.h:
+GhostManager.h:

@@ -1,10 +1,9 @@
-
 #include "Utilities.h"
 #include "math.h"
 #include <xc.h>
 
 
-/*double Abs(double value)
+double Abs(double value)
 {
     if (value>=0)
         return value;
@@ -34,11 +33,18 @@ double LimitToInterval(double value, double min, double max)
         return max;
     else
         return value;
-}*/
+}
 
 double Modulo2PIAngleRadian(double angleRadian) {
     double angleTemp = fmod(angleRadian - PI, 2 * PI) + PI;
     return fmod(angleTemp + PI, 2 * PI) - PI;
+}
+
+double ModuloByAngle(double angleToCenterAround, double angleToCorrect) // Fonction pour normaliser un angle entre -PI et PI
+{
+    int decalageNbTours = (int) round((angleToCorrect - angleToCenterAround) / (2 * M_PI));
+    double thetaDest = angleToCorrect - decalageNbTours * 2 * M_PI;
+    return thetaDest;
 }
 
 float getFloat(unsigned char *p, int index)
@@ -78,9 +84,8 @@ void getBytesFromDouble(unsigned char *p, int index, double d)
         p[index + i] = f_ptr[i];
 }
 
-double ModuloByAngle(double angleToCenterAround, double angleToCorrect)
-{
-    int decalageNbTours = (int) round((angleToCorrect - angleToCenterAround) / (2*M_PI));
+float moduloByAngle(double angleToCenterAround, double angleToCorrect ){
+    int decalageNbTours = (int) round((angleToCorrect - angleToCenterAround)/ (2*M_PI));
     double thetaDest = angleToCorrect - decalageNbTours * 2 * M_PI;
-    return thetaDest ;
+    return thetaDest;
 }
